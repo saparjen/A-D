@@ -1,0 +1,215 @@
+class BankLening:
+    def __init__(self, bank_id, bedrag):
+        self.bank_id = bank_id
+        self.bedrag = bedrag
+
+    def __eq__(self, other):
+        return isinstance(other, BankLening) and self.bank_id == other.bank_id
+
+    def __hash__(self):
+        return hash(self.bank_id)
+
+    def __str__(self):
+        return f"{self.bank_id}:{self.bedrag}"
+________________________________________
+✅ 2. Klasse Bank (volgens examen – Python versie)
+class Bank:
+    def __init__(self, bank_id, naam, balans):
+        self.id = bank_id
+        self.naam = naam
+        self.balans = balans
+        self.bankleningen = set()   # HashSet equivalent
+
+    # -------------------------
+    # Helper: zoek lening
+    # -------------------------
+    def _find_lening(self, bank_id):
+        for l in self.bankleningen:
+            if l.bank_id == bank_id:
+                return l
+        return None
+
+    # -------------------------
+    # 1. Toevoegen lening
+    # -------------------------
+    def toevoegenLening(self, bank_id, bedrag):
+        if self.balans < bedrag:
+            return False
+
+        lening = self._find_lening(bank_id)
+
+        if lening:
+            lening.bedrag += bedrag
+        else:
+            self.bankleningen.add(BankLening(bank_id, bedrag))
+
+        self.balans -= bedrag
+        return True
+
+    # -------------------------
+    # 2. Ontvangen terugbetaling
+    # -------------------------
+    def ontvangenTerugbetaling(self, bank_id, bedrag):
+        lening = self._find_lening(bank_id)
+        if lening is None:
+            return False
+
+        if bedrag > lening.bedrag:
+            # fout → niets aanpassen
+            return False
+
+        if bedrag == lening.bedrag:
+            self.bankleningen.remove(lening)
+        else:
+            lening.bedrag -= bedrag
+
+        self.balans += bedrag
+        return True
+
+    # -------------------------
+    # equals/hash → op basis van id
+    # -------------------------
+    def __eq__(self, other):
+        return isinstance(other, Bank) and self.id == other.id
+
+    def __hash__(self):
+        return hash(self.id)
+
+    # -------------------------
+    # parseBank
+    # -------------------------
+    @staticmethod
+    def parseBank(line):
+        parts = line.split(";")
+
+        bank_id = parts[0]
+        naam = parts[1]
+        balans = float(parts[2])
+
+        aantal = int(parts[3])
+        b = Bank(bank_id, naam, balans)
+
+        index = 4
+        for _ in range(aantal):
+            leenID = parts[index]
+            bedrag = float(parts[index + 1])
+            index += 2
+            b.toevoegenLening(leenID, bedrag)
+
+        return b
+
+    # -------------------------
+    # toString
+    # -------------------------
+    def __str__(self):
+        totaal = sum(l.bedrag for l in self.bankleningen)
+        return f"{self.naam} - {self.balans} - {len(self.bankleningen)} - {totaal}"
+________________________________________
+✅ 3. Klasse BankNetwerk (10 punten) – Python implementatie
+class BankNetwerk:
+    def __init__(self, filename):
+        self.banken = {}  # HashMap equivalent
+
+        with open(filename, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    bank = Bank.parseBank(line)
+                    self.banken[bank.id] = bank
+
+    # -------------------------
+    # 1. Toevoegen bank
+    # -------------------------
+    def toevoegenBank(self, bank_id, naam, balans):
+        self.banken[bank_id] = Bank(bank_id, naam, balans)
+
+    # -------------------------
+    # 2. Balans aanpassen
+    # -------------------------
+    def aanpassenBalans(self, bank_id, bedrag):
+        if bank_id not in self.banken:
+            return False
+        self.banken[bank_id].balans += bedrag
+        return True
+
+    # -------------------------
+    # 3. Aangaan lening
+    # -------------------------
+    def aangaanBankLening(self, uitlener, ontlener, bedrag):
+        if uitlener not in self.banken or ontlener not in self.banken:
+            return False
+
+        bank_u = self.banken[uitlener]
+        bank_o = self.banken[ontlener]
+
+        if not bank_u.toevoegenLening(ontlener, bedrag):
+            return False
+
+        # bij ontlener moet bedrag bij balans
+        bank_o.balans += bedrag
+        return True
+
+    # -------------------------
+    # 4. Terugbetalen lening
+    # -------------------------
+    def terugBetalenLening(self, uitlener, ontlener, bedrag):
+        if uitlener not in self.banken or ontlener not in self.banken:
+            return False
+
+        lender = self.banken[uitlener]
+        borrower = self.banken[ontlener]
+
+        # borrower moet genoeg geld hebben
+        if borrower.balans < bedrag:
+            return False
+
+        if not lender.ontvangenTerugbetaling(ontlener, bedrag):
+            return False
+
+        borrower.balans -= bedrag
+        return True
+
+    # -------------------------
+    # 5. BankRun algoritme
+    # -------------------------
+    def bankRun(self, limiet):
+        ids = list(self.banken.keys())
+        n = len(ids)
+
+        # matrix bouwen
+        matrix = [[0]*n for _ in range(n)]
+
+        for i in range(n):
+            b = self.banken[ids[i]]
+            for lening in b.bankleningen:
+                j = ids.index(lening.bank_id)
+                matrix[i][j] = lening.bedrag
+
+        # analyse
+        onveilig = []
+
+        while True:
+            iets_gevonden = False
+
+            for i in range(n):
+                bank_id = ids[i]
+                if bank_id in onveilig:
+                    continue
+
+                bank = self.banken[bank_id]
+                totale_middelen = bank.balans + sum(matrix[j][i] for j in range(n))
+
+                if totale_middelen < limiet:
+                    onveilig.append(bank_id)
+                    iets_gevonden = True
+
+                    # verwijder dat deze bank terugbetaalt
+                    for r in range(n):
+                        matrix[r][i] = 0
+                    for c in range(n):
+                        matrix[i][c] = 0
+
+            if not iets_gevonden:
+                break
+
+        return onveilig
