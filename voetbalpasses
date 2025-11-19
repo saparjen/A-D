@@ -1,0 +1,514 @@
+class Player:
+    def __init__(self, name: str, number: int):
+        self.name = name
+        self.number = number
+
+    # gelijkheid: enkel naam telt
+    def __eq__(self, other):
+        if not isinstance(other, Player):
+            return False
+        return self.name == other.name
+
+    # sorteren op rugnummer
+    def __lt__(self, other):
+        if not isinstance(other, Player):
+            return NotImplemented
+        return self.number < other.number
+
+    # stringrepresentatie
+    def __str__(self):
+        return f"{self.name} ({self.number})"
+
+    # handig bij printen van lijsten
+    def __repr__(self):
+        return str(self)
+# 1. Maak drie spelers
+p1 = Player("Eden Hazard", 10)
+p2 = Player("Moussa Dembele", 19)
+p3 = Player("Jan Vertonghen", 5)
+
+players = [p1, p2, p3]
+
+# 2. Print één speler
+print("Print één speler:")
+print(p1)
+print()
+
+# 3. Test eq
+print("Test eq:")
+print(p1 == Player("Eden Hazard", 99))  # True, want naam is gelijk
+print(p1 == p2)  # False
+print()
+
+# 4. Test lt en sorteren
+print("Gesorteerd op shirt-nummer:")
+sorted_players = sorted(players)
+print(sorted_players)
+
+#de functies expliciet gebruiken
+# spelers maken
+p1 = Player("Eden Hazard", 10)
+p2 = Player("Moussa Dembele", 19)
+p3 = Player("Jan Vertonghen", 5)
+
+print("=== __str__ EXPPLICIET ===")
+print(p1.__str__())
+
+print("\n=== __eq__ EXPLICIET ===")
+print(p1.__eq__(Player("Eden Hazard", 99)))  # True
+print(p1.__eq__(p2))  # False
+
+print("\n=== __lt__ EXPLICIET ===")
+print(p3.__lt__(p1))  # True
+print(p2.__lt__(p1))  # False
+
+print("\n=== SORT ===")
+print(sorted([p1, p2, p3]))  # gebruikt __lt_
+
+
+class Pass:
+    def __init__(self, sender, receiver, nr_of_times: int):
+        self.sender = sender
+        self.receiver = receiver
+        self.nr_of_times = nr_of_times
+
+    # --- methodes ---
+
+    def get_weight(self) -> int:
+        return self.nr_of_times
+
+    def get_start(self):
+        return self.sender
+
+    def get_end(self):
+        return self.receiver
+
+    # gelijkheid: zelfde sender én receiver
+    def __eq__(self, other):
+        if not isinstance(other, Pass):
+            return False
+        return self.sender == other.sender and self.receiver == other.receiver
+
+    def __str__(self):
+        return f"Pass from {self.sender.name} to {self.receiver.name}"
+
+    def __repr__(self):
+        return str(self)
+
+# 1. Players
+p1 = Player("Eden Hazard", 10)
+p2 = Player("Moussa Dembele", 19)
+p3 = Player("Jan Vertonghen", 5)
+
+# 2. Passes
+pass1 = Pass(p1, p2, 4)
+pass2 = Pass(p3, p1, 2)
+pass3 = Pass(p1, p2, 10)  # zelfde sender/receiver als pass1 → eq True
+
+# 3. Print één Pass
+print("Print Pass:")
+print(pass1)
+
+# 4. Test eq
+print("\nTest eq:")
+print(pass1 == pass3)   # True — zelfde sender + receiver
+print(pass1 == pass2)   # False
+
+# 5. Test get_weight
+print("\nTest get_weight:")
+print(pass1.get_weight())   # 4
+print(pass3.get_weight())   # 10
+
+
+
+class PassGraph:
+    def __init__(self):
+        # lijst met Player-objecten
+        self.players: list[Player] = []
+
+        # adjacency-list structuur:
+        # key = sender.name
+        # value = lijst van Pass-objecten
+        self.adj: dict[str, list[Pass]] = {}
+
+    # ============================================================
+    # 1) BASISOPERATIES
+    # ============================================================
+
+    def add_player(self, player: Player):
+        """Voeg speler toe als hij nog niet bestaat."""
+        # bestaat speler al?
+        for p in self.players:
+            if p.name == player.name:
+                return   # niet opnieuw toevoegen
+
+        self.players.append(player)
+        self.adj[player.name] = []   # lege lijst voor deze zender
+
+    def has_player(self, p):
+        """Ondersteunt Player-object OF string-naam."""
+        name = p.name if isinstance(p, Player) else p
+        return any(pl.name == name for pl in self.players)
+
+    def get_player(self, name: str):
+        """Geef Player terug of None."""
+        for p in self.players:
+            if p.name == name:
+                return p
+        return None
+
+    def add_pass(self, sender: Player, receiver: Player, times: int = 1):
+        """Voeg pass toe of verhoog bestaand gewicht."""
+        if times <= 0:
+            raise ValueError("times must be > 0")
+
+        # controleer dat beide spelers bestaan
+        if not self.has_player(sender) or not self.has_player(receiver):
+            raise ValueError("Sender or receiver not in PassGraph")
+
+        sender_name = sender.name
+        receiver_name = receiver.name
+
+        # kijk of pass al bestaat
+        for p in self.adj[sender_name]:
+            if p.sender == sender and p.receiver == receiver:
+                p.nr_of_times += times
+                return
+
+        # nieuwe pass aanmaken
+        new_pass = Pass(sender, receiver, times)
+        self.adj[sender_name].append(new_pass)
+
+    def get_pass(self, sender_name: str, receiver_name: str):
+        """Geef pass object of None."""
+        if sender_name not in self.adj:
+            return None
+
+        for p in self.adj[sender_name]:
+            if p.receiver.name == receiver_name:
+                return p
+
+        return None
+
+    def neighbors(self, sender_name: str):
+        """Geef alle uitgaande passes."""
+        return self.adj.get(sender_name, [])
+
+    # ============================================================
+    # 2) ANALYSEMETHODES
+    # ============================================================
+
+    def total_weight(self, subset: list[str] | None = None):
+        """
+        Som van nr_of_times tussen spelers binnen subset.
+        """
+        if subset is None:
+            subset = [p.name for p in self.players]
+
+        subset = set(subset)
+        total = 0
+
+        for sender in subset:
+            if sender not in self.adj:
+                continue
+            for p in self.adj[sender]:
+                if p.receiver.name in subset:
+                    total += p.nr_of_times
+
+        return total
+
+    def pass_intensity(self, subset: list[str] | None = None) -> float:
+        """
+        (totaal gewicht passes binnen subset) / (n * (n-1))
+        """
+        if subset is None:
+            subset = [p.name for p in self.players]
+
+        n = len(subset)
+        if n < 2:
+            return 0.0
+
+        numerator = self.total_weight(subset)
+        denominator = n * (n - 1)
+
+        return numerator / denominator
+
+    def top_pairs(self, k: int = 5):
+        """Return top-k passes (globaal) sorted by nr_of_times."""
+        alle_passes = []
+
+        for plist in self.adj.values():
+            alle_passes.extend(plist)
+
+        alle_passes.sort(key=lambda p: p.nr_of_times, reverse=True)
+        return alle_passes[:k]
+
+    def distribution_from(self, sender_name: str):
+        """Return lijst (receiver_name, count) sorted op count dalend."""
+        result = []
+
+        if sender_name not in self.adj:
+            return []
+
+        for p in self.adj[sender_name]:
+            result.append((p.receiver.name, p.nr_of_times))
+
+        result.sort(key=lambda x: x[1], reverse=True)
+        return result
+# ---------- Testscenario ----------
+
+# spelers maken
+p1 = Player("Hazard", 10)
+p2 = Player("De Bruyne", 7)
+p3 = Player("Lukaku", 9)
+p4 = Player("Mertens", 14)
+
+# graaf maken
+g = PassGraph()
+
+# spelers toevoegen
+g.add_player(p1)
+g.add_player(p2)
+g.add_player(p3)
+g.add_player(p4)
+
+# passes toevoegen
+g.add_pass(p1, p2, 5)
+g.add_pass(p1, p3, 2)
+g.add_pass(p2, p1, 3)
+g.add_pass(p2, p3, 4)
+g.add_pass(p3, p2, 1)
+g.add_pass(p3, p4, 6)
+
+print("=== All passes from Hazard ===")
+print(g.neighbors("Hazard"))
+
+print("\n=== Pass from Hazard to De Bruyne ===")
+print(g.get_pass("Hazard", "De Bruyne"))
+
+print("\n=== Total weight (all players) ===")
+print(g.total_weight())
+
+print("\n=== Pass intensity (subset = Hazard, De Bruyne, Lukaku) ===")
+print(g.pass_intensity(["Hazard", "De Bruyne", "Lukaku"]))
+
+print("\n=== Top 3 pairs ===")
+print(g.top_pairs(3))
+
+print("\n=== Distribution from Lukaku ===")
+print(g.distribution_from("Lukaku"))
+# ---------- Testscenario ----------
+
+# spelers maken
+p1 = Player("Hazard", 10)
+p2 = Player("De Bruyne", 7)
+p3 = Player("Lukaku", 9)
+p4 = Player("Mertens", 14)
+
+# graaf maken
+g = PassGraph()
+
+# spelers toevoegen
+g.add_player(p1)
+g.add_player(p2)
+g.add_player(p3)
+g.add_player(p4)
+
+# passes toevoegen
+g.add_pass(p1, p2, 5)
+g.add_pass(p1, p3, 2)
+g.add_pass(p2, p1, 3)
+g.add_pass(p2, p3, 4)
+g.add_pass(p3, p2, 1)
+g.add_pass(p3, p4, 6)
+
+print("=== All passes from Hazard ===")
+print(g.neighbors("Hazard"))
+
+print("\n=== Pass from Hazard to De Bruyne ===")
+print(g.get_pass("Hazard", "De Bruyne"))
+
+print("\n=== Total weight (all players) ===")
+print(g.total_weight())
+
+print("\n=== Pass intensity (subset = Hazard, De Bruyne, Lukaku) ===")
+print(g.pass_intensity(["Hazard", "De Bruyne", "Lukaku"]))
+
+print("\n=== Top 3 pairs ===")
+print(g.top_pairs(3))
+
+print("\n=== Distribution from Lukaku ===")
+print(g.distribution_from("Lukaku"))
+
+
+class PassGraph:
+    def __init__(self, path: str | None = None):
+        self.players: list[Player] = []
+        self.adj: dict[str, list[Pass]] = {}
+
+        # Als pad opgegeven → meteen inlezen
+        if path is not None:
+            self._load_from_txt(path)
+
+    # ===================================
+    # 1) Basisoperaties Deel 4
+    # ===================================
+
+    def players_list(self):
+        """Geef een kopie van de spelerslijst."""
+        return list(self.players)
+
+    def passes(self):
+        """Geef ALLE passes in de graaf."""
+        result = []
+        for plist in self.adj.values():
+            result.extend(plist)
+        return result
+
+    # ===================================
+    # 2) Parser voor constructor
+    # ===================================
+
+    def _load_from_txt(self, path: str):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+            # Alles inlezen
+                lines = f.readlines()
+        except FileNotFoundError:
+            raise ValueError("Bestand niet gevonden")
+
+        section = None   # wordt 'PLAYERS' of 'PASSES'
+
+        for raw in lines:
+            line = raw.strip()
+
+            # regels die niks voorstellen
+            if line == "" or line.startswith("#"):
+                continue
+
+            # secties herkennen
+            if line == "[PLAYERS]":
+                section = "PLAYERS"
+                continue
+            if line == "[PASSES]":
+                section = "PASSES"
+                continue
+
+            # onbekende sectie
+            if section is None:
+                raise ValueError("Ongeldige structuur: sectie ontbreekt")
+
+            # -----------------------------
+            # PLAYERS
+            # -----------------------------
+            if section == "PLAYERS":
+                if ";" not in line:
+                    raise ValueError("Ongeldige spelerregel")
+
+                name, number = [x.strip() for x in line.split(";")]
+
+                if not number.isdigit():
+                    raise ValueError("Ongeldig rugnummer")
+
+                number = int(number)
+
+                # speler toevoegen
+                self.add_player(Player(name, number))
+                continue
+
+            # -----------------------------
+            # PASSES
+            # -----------------------------
+            if section == "PASSES":
+                if "->" not in line or ":" not in line:
+                    raise ValueError("Ongeldige passregel")
+
+                left, right = line.split(":")
+
+                nr = right.strip()
+                if not nr.isdigit():
+                    raise ValueError("Aantal moet positief geheel getal zijn")
+
+                nr = int(nr)
+                if nr <= 0:
+                    raise ValueError("Aantal moet positief zijn")
+
+                sender_part, receiver_part = left.split("->")
+                sender_name = sender_part.strip()
+                receiver_name = receiver_part.strip()
+
+                # speler moet bestaan
+                sender = self.get_player(sender_name)
+                receiver = self.get_player(receiver_name)
+
+                if sender is None or receiver is None:
+                    raise ValueError("Pass verwijst naar onbekende speler")
+
+                # pass toevoegen
+                self.add_pass(sender, receiver, nr)
+
+    # ===================================
+    # 3) Opslaan naar txt
+    # ===================================
+
+    def save_to_txt(self, path: str):
+        with open(path, "w", encoding="utf-8") as f:
+
+            # PLAYERS
+            f.write("[PLAYERS]\n")
+            for p in sorted(self.players, key=lambda x: x.name):
+                f.write(f"{p.name};{p.number}\n")
+
+            f.write("\n[PASSES]\n")
+
+            # PASSES
+            all_passes = []
+            for plist in self.adj.values():
+                all_passes.extend(plist)
+
+            # Sorteer op sender naam, dan receiver naam
+            all_passes.sort(key=lambda x: (x.sender.name, x.receiver.name))
+
+            for p in all_passes:
+                f.write(
+                    f"{p.sender.name} -> {p.receiver.name} : {p.nr_of_times}\n"
+                )
+
+
+# -------- TEST DEEL 4 --------
+
+# 1. spelers
+p1 = Player("Hazard", 10)
+p2 = Player("De Bruyne", 7)
+p3 = Player("Lukaku", 9)
+p4 = Player("Mertens", 14)
+
+# 2. graaf opbouwen
+g = PassGraph()
+g.add_player(p1)
+g.add_player(p2)
+g.add_player(p3)
+g.add_player(p4)
+
+# 3. passes toevoegen (waarvan 1 meerdere keren)
+g.add_pass(p1, p2, 3)
+g.add_pass(p1, p2, 2)   # zelfde pass → totaal = 5
+g.add_pass(p2, p3, 1)
+g.add_pass(p3, p1, 4)
+g.add_pass(p4, p1, 1)
+
+# 4. opslaan
+g.save_to_txt("team.txt")
+
+print("team.txt succesvol opgeslagen!")
+
+# 5. opnieuw inlezen via constructor
+g2 = PassGraph("team.txt")
+
+print("team.txt opnieuw ingelezen!")
+
+# Check:
+print("Spelers ingelezen:", [p.name for p in g2.players_list()])
+print("Aantal passen ingelezen:", len(g2.passes()))
+for p in g2.passes():
+    print(p)
